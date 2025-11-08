@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: Mauro Rosero P.
+  description: Prepare a Debian/Ubuntu host with MicroK8s and supporting tooling for deploying AWX.
+  company: Libre Technology
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  galaxy_tags:
+    - awx
+    - kubernetes
+    - microk8s
+    - devops
+dependencies: []
+

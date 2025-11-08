@@ -1,0 +1,154 @@
+---
+- name: Update apt cache (Debian/Ubuntu)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_pkg_mgr == 'apt'
+  become: true
+
+- name: Install base packages
+  ansible.builtin.package:
+    name: "{{ awx_host_base_packages }}"
+    state: present
+  become: true
+
+- name: Ensure snapd service is running
+  ansible.builtin.service:
+    name: snapd
+    state: started
+    enabled: true
+  become: true
+
+- name: Install MicroK8s via snap
+  ansible.builtin.command:
+    cmd: "snap install microk8s --classic --channel={{ awx_microk8s_channel }}"
+    creates: /snap/bin/microk8s
+  become: true
+
+- name: Ensure admin user is part of microk8s group
+  ansible.builtin.user:
+    name: "{{ awx_host_admin_user }}"
+    append: true
+    groups: microk8s
+  become: true
+
+- name: Ensure .kube directory exists for admin user
+  ansible.builtin.file:
+    path: "/home/{{ awx_host_admin_user }}/.kube"
+    state: directory
+    owner: "{{ awx_host_admin_user }}"
+    group: "{{ awx_host_admin_user }}"
+    mode: "0700"
+  become: true
+
+- name: Validate MicroK8s access for admin user
+  ansible.builtin.command:
+    cmd: "sg microk8s -c 'microk8s kubectl get nodes --no-headers'"
+  become: true
+  become_user: "{{ awx_host_admin_user }}"
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  register: awx_microk8s_user_nodes
+  changed_when: false
+  failed_when: awx_microk8s_user_nodes.rc != 0
+
+- name: Wait for MicroK8s to become ready
+  ansible.builtin.command:
+    cmd: microk8s status --wait-ready
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  become: true
+
+- name: Enable required MicroK8s addons
+  ansible.builtin.command:
+    cmd: "microk8s enable {{ item }}"
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  register: awx_microk8s_enable
+  changed_when: "'already enabled' not in awx_microk8s_enable.stdout"
+  loop: "{{ awx_microk8s_addons }}"
+  become: true
+
+- name: Verify MicroK8s node readiness
+  ansible.builtin.command:
+    cmd: microk8s kubectl get nodes --no-headers
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  register: awx_microk8s_nodes
+  become: true
+  changed_when: false
+  failed_when: >
+    awx_microk8s_nodes.rc != 0 or
+    (
+      awx_microk8s_nodes.stdout_lines | length > 0 and
+      (
+        awx_microk8s_nodes.stdout_lines | reject("search", "\\bReady\\b") | list | length > 0
+      )
+    )
+
+- name: Show MicroK8s node status
+  ansible.builtin.debug:
+    msg: "{{ awx_microk8s_nodes.stdout_lines }}"
+  when: awx_microk8s_nodes.stdout_lines | length > 0
+
+- name: Inspect MicroK8s core pods
+  ansible.builtin.command:
+    cmd: microk8s kubectl get pods -A
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  register: awx_microk8s_pods
+  become: true
+  changed_when: false
+
+- name: Show MicroK8s pod status
+  ansible.builtin.debug:
+    msg: "{{ awx_microk8s_pods.stdout_lines }}"
+  when: awx_microk8s_pods.stdout_lines | length > 0
+
+- name: Capture MicroK8s kubeconfig
+  ansible.builtin.command:
+    cmd: microk8s config
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  register: awx_microk8s_config
+  become: true
+
+- name: Write kubeconfig for admin user
+  ansible.builtin.copy:
+    content: "{{ awx_microk8s_config.stdout }}"
+    dest: "{{ awx_host_kubeconfig_path }}"
+    owner: "{{ awx_host_admin_user }}"
+    group: "{{ awx_host_admin_user }}"
+    mode: "0600"
+  become: true
+
+- name: Install Helm via snap
+  ansible.builtin.command:
+    cmd: "snap install helm --classic --channel={{ awx_host_helm_channel }}"
+    creates: /snap/bin/helm
+  environment:
+    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+  become: true
+
+- name: Ensure kubectl symlink is present
+  ansible.builtin.file:
+    src: /snap/bin/microk8s.kubectl
+    dest: "{{ awx_host_kubectl_link }}"
+    state: link
+  become: true
+
+- name: Ensure helm symlink is present
+  ansible.builtin.file:
+    src: /snap/bin/helm
+    dest: "{{ awx_host_helm_link }}"
+    state: link
+  become: true
+
+- name: Ensure required Python packages are installed
+  ansible.builtin.pip:
+    name: "{{ awx_host_python_packages }}"
+    state: present
+    executable: pip3
+    extra_args: "{{ awx_host_pip_extra_args if awx_host_pip_extra_args | length > 0 else omit }}"
+  become: true
+

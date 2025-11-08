@@ -1,0 +1,36 @@
+---
+# Default user to grant access to MicroK8s resources
+awx_host_admin_user: "{{ ansible_user }}"
+
+# Base packages required before installing MicroK8s and tooling
+awx_host_base_packages:
+  - snapd
+  - python3-pip
+  - python3-venv
+  - curl
+  - tar
+
+# MicroK8s configuration
+awx_microk8s_channel: "1.30/stable"
+awx_microk8s_addons:
+  - dns
+  - storage
+  - ingress
+
+# Helm channel to install
+awx_host_helm_channel: "latest/stable"
+
+# Location where kubeconfig will be stored for the admin user
+awx_host_kubeconfig_path: "/home/{{ awx_host_admin_user }}/.kube/config"
+
+# Symlinks for CLI tools
+awx_host_kubectl_link: "/usr/local/bin/kubectl"
+awx_host_helm_link: "/usr/local/bin/helm"
+
+# Python packages required for Ansible kubernetes modules
+awx_host_python_packages:
+  - kubernetes
+
+# Extra arguments when installing Python packages (useful for PEP 668 distros)
+awx_host_pip_extra_args: "--break-system-packages"
+
