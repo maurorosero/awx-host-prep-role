@@ -3,7 +3,7 @@
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
-  when: ansible_pkg_mgr == 'apt'
+  when: ansible_facts['pkg_mgr'] == 'apt'
   become: true
 
 - name: Install base packages
@@ -47,7 +47,7 @@
   become: true
   become_user: "{{ awx_host_admin_user }}"
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   register: awx_microk8s_user_nodes
   changed_when: false
   failed_when: awx_microk8s_user_nodes.rc != 0
@@ -56,14 +56,14 @@
   ansible.builtin.command:
     cmd: microk8s status --wait-ready
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   become: true
 
 - name: Enable required MicroK8s addons
   ansible.builtin.command:
     cmd: "microk8s enable {{ item }}"
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   register: awx_microk8s_enable
   changed_when: "'already enabled' not in awx_microk8s_enable.stdout"
   loop: "{{ awx_microk8s_addons }}"
@@ -73,7 +73,7 @@
   ansible.builtin.command:
     cmd: microk8s kubectl get nodes --no-headers
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   register: awx_microk8s_nodes
   become: true
   changed_when: false
@@ -95,7 +95,7 @@
   ansible.builtin.command:
     cmd: microk8s kubectl get pods -A
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   register: awx_microk8s_pods
   become: true
   changed_when: false
@@ -109,7 +109,7 @@
   ansible.builtin.command:
     cmd: microk8s config
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   register: awx_microk8s_config
   become: true
 
@@ -127,7 +127,7 @@
     cmd: "snap install helm --classic --channel={{ awx_host_helm_channel }}"
     creates: /snap/bin/helm
   environment:
-    PATH: "/snap/bin:{{ ansible_env.PATH }}"
+    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
   become: true
 
 - name: Ensure kubectl symlink is present
