@@ -2,8 +2,8 @@
 # El rol solo está soportado en Debian/Ubuntu (apt, ufw, snap). En otros OS falla con mensaje claro.
 - name: Comprobar que el sistema es Debian o Ubuntu
   ansible.builtin.assert:
-    that: ansible_os_family == 'Debian'
-    fail_msg: "awx_host_prep solo soporta Debian/Ubuntu. Sistema detectado: {{ ansible_distribution | default('N/A') }} (familia {{ ansible_os_family | default('N/A') }})."
+    that: ansible_facts['os_family'] == 'Debian'
+    fail_msg: "awx_host_prep solo soporta Debian/Ubuntu. Sistema detectado: {{ ansible_facts['distribution'] | default('N/A') }} (familia {{ ansible_facts['os_family'] | default('N/A') }})."
   tags: always
 
 - name: Update apt cache (Debian/Ubuntu)
