@@ -19,12 +19,13 @@ Role that prepares a Debian/Ubuntu host to run AWX on MicroK8s. It installs requ
 | `awx_host_kubeconfig_path` | `/home/{{ awx_host_admin_user }}/.kube/config` | Kubeconfig path exported for the admin user. |
 | `awx_host_kubectl_link` | `/usr/local/bin/kubectl` | Symlink target for kubectl. |
 | `awx_host_helm_link` | `/usr/local/bin/helm` | Symlink target for helm. |
+| `awx_host_ingress_firewall_allow` | `true` | When true and ufw is active, allow TCP 80 and 443 so ingress is reachable from outside. Does not enable ufw. |
 
 See `defaults/main.yml` for the full list of tunables.
 
 ## Dependencies
 
-None.
+- When `awx_host_ingress_firewall_allow` is true (default), the play must have the **community.general** collection available (for the `ufw` module). Declare it in the play's `collections:` or install with `ansible-galaxy collection install community.general`.
 
 ## Example Playbook
 

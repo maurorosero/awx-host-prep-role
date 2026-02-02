@@ -1,4 +1,11 @@
 ---
+# El rol solo está soportado en Debian/Ubuntu (apt, ufw, snap). En otros OS falla con mensaje claro.
+- name: Comprobar que el sistema es Debian o Ubuntu
+  ansible.builtin.assert:
+    that: ansible_os_family == 'Debian'
+    fail_msg: "awx_host_prep solo soporta Debian/Ubuntu. Sistema detectado: {{ ansible_distribution | default('N/A') }} (familia {{ ansible_os_family | default('N/A') }})."
+  tags: always
+
 - name: Update apt cache (Debian/Ubuntu)
   ansible.builtin.apt:
     update_cache: true
@@ -47,7 +54,7 @@
   become: true
   become_user: "{{ awx_host_admin_user }}"
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   register: awx_microk8s_user_nodes
   changed_when: false
   failed_when: awx_microk8s_user_nodes.rc != 0
@@ -56,24 +63,50 @@
   ansible.builtin.command:
     cmd: microk8s status --wait-ready
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   become: true
 
 - name: Enable required MicroK8s addons
   ansible.builtin.command:
     cmd: "microk8s enable {{ item }}"
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   register: awx_microk8s_enable
   changed_when: "'already enabled' not in awx_microk8s_enable.stdout"
   loop: "{{ awx_microk8s_addons }}"
+  become: true
+
+# Permitir 80/443 en el firewall del host (ufw) para que el ingress sea accesible desde fuera.
+# Solo se aplica si ufw está activo; no se activa ufw. Requiere community.general (módulo ufw).
+# El rol está pensado para Debian/Ubuntu, donde ufw es el firewall por defecto.
+- name: Check if UFW is active
+  ansible.builtin.command:
+    cmd: ufw status
+  register: __awx_ufw_status
+  changed_when: false
+  failed_when: false
+  when: awx_host_ingress_firewall_allow | default(true) | bool
+
+- name: Allow TCP 80 and 443 for ingress (when UFW is active)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "80"
+    - "443"
+  when:
+    - awx_host_ingress_firewall_allow | default(true) | bool
+    - __awx_ufw_status is defined
+    - __awx_ufw_status.rc == 0
+    - "'Status: active' in __awx_ufw_status.stdout"
   become: true
 
 - name: Verify MicroK8s node readiness
   ansible.builtin.command:
     cmd: microk8s kubectl get nodes --no-headers
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   register: awx_microk8s_nodes
   become: true
   changed_when: false
@@ -95,7 +128,7 @@
   ansible.builtin.command:
     cmd: microk8s kubectl get pods -A
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   register: awx_microk8s_pods
   become: true
   changed_when: false
@@ -109,7 +142,7 @@
   ansible.builtin.command:
     cmd: microk8s config
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   register: awx_microk8s_config
   become: true
 
@@ -127,7 +160,7 @@
     cmd: "snap install helm --classic --channel={{ awx_host_helm_channel }}"
     creates: /snap/bin/helm
   environment:
-    PATH: "/snap/bin:{{ ansible_facts['env']['PATH'] | default('') }}"
+    PATH: "/snap/bin:/usr/local/bin:/usr/bin:/bin"
   become: true
 
 - name: Ensure kubectl symlink is present

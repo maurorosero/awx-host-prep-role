@@ -34,3 +34,7 @@ awx_host_python_packages:
 # Extra arguments when installing Python packages (useful for PEP 668 distros)
 awx_host_pip_extra_args: "--break-system-packages"
 
+# When true, allow TCP 80 and 443 in the host firewall (ufw) so ingress is reachable from outside.
+# Only applied when ufw is already active; does not enable ufw.
+awx_host_ingress_firewall_allow: true
+
